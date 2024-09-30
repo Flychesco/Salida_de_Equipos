@@ -1,14 +1,30 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, scrolledtext
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
 import os
 import subprocess
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 class ExcelController:
     def __init__(self, master):
         self.master = master
-        master.title("Controlador de Excel")
+        master.title("SALIDAS GAME")
+        
+        # Aumentar el tamaño de la ventana y centrarla en la pantalla
+        master.geometry("800x600")
+        master.update_idletasks()
+        width = master.winfo_width()
+        height = master.winfo_height()
+        x = (master.winfo_screenwidth() // 2) - (width // 2)
+        y = (master.winfo_screenheight() // 2) - (height // 2)
+        master.geometry('{}x{}+{}+{}'.format(width, height, x, y))
+
+        # Frame principal para centrar los widgets
+        main_frame = tk.Frame(master)
+        main_frame.place(relx=0.5, rely=0.5, anchor='center')
 
         # Variables
         self.reference = tk.StringVar()
@@ -16,37 +32,54 @@ class ExcelController:
         self.value2 = tk.StringVar()
         self.value3 = tk.StringVar()
         self.value4 = tk.StringVar()
-        self.excel_file = "Salida Equipos.xlsx"  # Nombre por defecto del archivo Excel
+        self.excel_files = {
+            "H": "Salida Equipos H.xlsx",
+            "V": "Salida Equipos V.xlsx"
+        }
 
         # Crear widgets
-        tk.Label(master, text="Equipo:").grid(row=0, column=0, sticky="e")
-        self.entry_reference = tk.Entry(master, textvariable=self.reference)
-        self.entry_reference.grid(row=0, column=1)
+        tk.Label(main_frame, text="Equipo:").grid(row=0, column=0, sticky="e", padx=10, pady=5)
+        self.entry_reference = tk.Entry(main_frame, textvariable=self.reference, validate="key", width=20)
+        self.entry_reference['validatecommand'] = (self.entry_reference.register(self.validate_numeric_input), '%P', 6)
+        self.entry_reference.grid(row=0, column=1, padx=10, pady=5)
 
-        tk.Label(master, text="SKU:").grid(row=1, column=0, sticky="e")
-        self.entry_value1 = tk.Entry(master, textvariable=self.value1, state="disabled")
-        self.entry_value1.grid(row=1, column=1)
+        tk.Label(main_frame, text="SKU:").grid(row=1, column=0, sticky="e", padx=10, pady=5)
+        self.entry_value1 = tk.Entry(main_frame, textvariable=self.value1, state="disabled", validate="key", width=20)
+        self.entry_value1['validatecommand'] = (self.entry_value1.register(self.validate_numeric_input), '%P', 6)
+        self.entry_value1.grid(row=1, column=1, padx=10, pady=5)
 
-        tk.Label(master, text="RMA:").grid(row=2, column=0, sticky="e")
-        self.entry_value2 = tk.Entry(master, textvariable=self.value2, state="disabled")
-        self.entry_value2.grid(row=2, column=1)
+        tk.Label(main_frame, text="RMA:").grid(row=2, column=0, sticky="e", padx=10, pady=5)
+        self.entry_value2 = tk.Entry(main_frame, textvariable=self.value2, state="disabled", width=20)
+        self.entry_value2.grid(row=2, column=1, padx=10, pady=5)
 
-        tk.Label(master, text="$:").grid(row=3, column=0, sticky="e")
-        self.entry_value3 = tk.Entry(master, textvariable=self.value3, state="disabled")
-        self.entry_value3.grid(row=3, column=1)
+        tk.Label(main_frame, text="$:").grid(row=3, column=0, sticky="e", padx=10, pady=5)
+        self.entry_value3 = tk.Entry(main_frame, textvariable=self.value3, state="disabled", width=20)
+        self.entry_value3.grid(row=3, column=1, padx=10, pady=5)
 
-        tk.Label(master, text="Trabajo_Realizado:").grid(row=4, column=0, sticky="e")
-        self.entry_value4 = tk.Entry(master, textvariable=self.value4, state="disabled")
-        self.entry_value4.grid(row=4, column=1)
+        tk.Label(main_frame, text="Trabajo_Realizado:").grid(row=4, column=0, sticky="ne", padx=10, pady=5)
+        self.entry_value4 = scrolledtext.ScrolledText(main_frame, width=60, height=4, wrap=tk.WORD, state="disabled")
+        self.entry_value4.grid(row=4, column=1, padx=10, pady=5)
 
-        self.btn_unlock = tk.Button(master, text="Buscar Equipo", command=self.unlock_fields)
-        self.btn_unlock.grid(row=5, column=0, columnspan=2)
+        self.btn_unlock = tk.Button(main_frame, text="Buscar Equipo", command=self.unlock_fields, width=15)
+        self.btn_unlock.grid(row=5, column=0, columnspan=2, pady=10)
 
-        self.btn_save = tk.Button(master, text="Guardar", command=self.save_to_excel)
-        self.btn_save.grid(row=6, column=0, columnspan=2)
+        button_frame = tk.Frame(main_frame)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=10)
 
-        self.btn_create_folder = tk.Button(master, text="Guardar imagen", command=self.create_folder)
-        self.btn_create_folder.grid(row=7, column=0, columnspan=2)
+        self.btn_save_h = tk.Button(button_frame, text="Guardar en H", command=lambda: self.save_to_excel("H"), width=15)
+        self.btn_save_h.pack(side=tk.LEFT, padx=5)
+
+        self.btn_save_v = tk.Button(button_frame, text="Guardar en V", command=lambda: self.save_to_excel("V"), width=15)
+        self.btn_save_v.pack(side=tk.LEFT, padx=5)
+
+        self.btn_create_folder = tk.Button(main_frame, text="Guardar imagen", command=self.create_folder, width=15)
+        self.btn_create_folder.grid(row=7, column=0, columnspan=2, pady=10)
+
+        self.btn_generate_pdf = tk.Button(main_frame, text="Generar PDF", command=self.generate_pdf, width=15)
+        self.btn_generate_pdf.grid(row=8, column=0, columnspan=2, pady=10)
+
+    def validate_numeric_input(self, value, max_length):
+        return len(value) <= int(max_length) and (value.isdigit() or value == "")
 
     def unlock_fields(self):
         if self.reference.get():
@@ -57,13 +90,15 @@ class ExcelController:
         else:
             messagebox.showerror("Error", "Por favor, ingrese una referencia")
 
-    def save_to_excel(self):
-        if not all([self.reference.get(), self.value1.get(), self.value2.get(), self.value3.get(), self.value4.get()]):
+    def save_to_excel(self, excel_choice):
+        if not all([self.reference.get(), self.value1.get(), self.value2.get(), self.value3.get(), self.entry_value4.get("1.0", tk.END).strip()]):
             messagebox.showerror("Error", "Por favor, complete todos los campos")
             return
 
+        excel_file = self.excel_files[excel_choice]
+
         # Verificar si el archivo existe, si no, crearlo
-        if not os.path.exists(self.excel_file):
+        if not os.path.exists(excel_file):
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = "Datos"
@@ -71,7 +106,7 @@ class ExcelController:
             ws.append(headers)
             self.format_headers(ws)
         else:
-            wb = openpyxl.load_workbook(self.excel_file)
+            wb = openpyxl.load_workbook(excel_file)
             ws = wb.active
 
         # Contar el número de filas con datos
@@ -95,11 +130,11 @@ class ExcelController:
                     row[1].value = self.value1.get()
                     row[2].value = self.value2.get()
                     row[3].value = self.value3.get()
-                    row[4].value = self.value4.get()
+                    row[4].value = self.entry_value4.get("1.0", tk.END).strip().upper()  # Convertir a mayúsculas
                     break
         else:
             # Añadir una nueva fila
-            values = [self.reference.get(), self.value1.get(), self.value2.get(), self.value3.get(), self.value4.get()]
+            values = [self.reference.get(), self.value1.get(), self.value2.get(), self.value3.get(), self.entry_value4.get("1.0", tk.END).strip().upper()]
             ws.append(values)
 
         # Ajustar el ancho de las columnas
@@ -115,8 +150,22 @@ class ExcelController:
             adjusted_width = (max_length + 2)
             ws.column_dimensions[column].width = adjusted_width
 
-        wb.save(self.excel_file)
-        messagebox.showinfo("Éxito", "Datos guardados correctamente en el archivo Excel")
+        wb.save(excel_file)
+        messagebox.showinfo("Éxito", f"Datos guardados correctamente en el archivo Excel {excel_choice}")
+        
+        # Resetear los campos después de guardar
+        self.reset_fields()
+
+    def reset_fields(self):
+        self.reference.set("")
+        self.value1.set("")
+        self.value2.set("")
+        self.value3.set("")
+        self.entry_value4.delete("1.0", tk.END)
+        self.entry_value1.config(state="disabled")
+        self.entry_value2.config(state="disabled")
+        self.entry_value3.config(state="disabled")
+        self.entry_value4.config(state="disabled")
         
     def create_folder(self):
         if not self.reference.get():
@@ -149,6 +198,49 @@ class ExcelController:
             if row[0] == self.reference.get():
                 return True
         return False
+
+    def generate_pdf(self):
+        excel_choice = messagebox.askquestion("Seleccionar archivo", "¿Desea generar el PDF del archivo H?")
+        excel_file = self.excel_files["H"] if excel_choice == 'yes' else self.excel_files["V"]
+        
+        if not os.path.exists(excel_file):
+            messagebox.showerror("Error", f"El archivo {excel_file} no existe")
+            return
+
+        wb = openpyxl.load_workbook(excel_file)
+        ws = wb.active
+
+        data = []
+        for row in ws.iter_rows(values_only=True):
+            data.append(row)
+
+        pdf_file = f"{os.path.splitext(excel_file)[0]}.pdf"
+        doc = SimpleDocTemplate(pdf_file, pagesize=letter)
+        elements = []
+
+        table = Table(data)
+        style = TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 14),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 12),
+            ('TOPPADDING', (0, 1), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ])
+        table.setStyle(style)
+        elements.append(table)
+
+        doc.build(elements)
+        messagebox.showinfo("Éxito", f"PDF generado correctamente: {pdf_file}")
+
 root = tk.Tk()
 app = ExcelController(root)
 root.mainloop()

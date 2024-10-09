@@ -1,9 +1,10 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext
+from tkinter import filedialog, messagebox, scrolledtext, simpledialog
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
 import os
 import subprocess
+import win32com.client
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
@@ -78,6 +79,10 @@ class ExcelController:
         self.btn_generate_pdf = tk.Button(main_frame, text="Generar PDF", command=self.generate_pdf, width=15)
         self.btn_generate_pdf.grid(row=8, column=0, columnspan=2, pady=10)
 
+        #botón "Crear salida"
+        self.btn_create_output = tk.Button(main_frame, text="Crear salida", command=self.create_output, width=15)
+        self.btn_create_output.grid(row=9, column=0, columnspan=2, pady=10)
+    
     def validate_numeric_input(self, value, max_length):
         return len(value) <= int(max_length) and (value.isdigit() or value == "")
 
@@ -90,13 +95,68 @@ class ExcelController:
         else:
             messagebox.showerror("Error", "Por favor, ingrese una referencia")
 
+    def create_output(self):
+        if messagebox.askyesno("Confirmación", "¿Está seguro de que desea crear la salida?"):
+            # Preguntar si es H o V
+            choice = simpledialog.askstring("Selección", "¿Desea crear la salida para H o V?", initialvalue="H")
+            if choice:
+                choice = choice.upper()  # Convertir a mayúsculas
+                if choice not in ["H", "V"]:
+                    messagebox.showerror("Error", "Opción no válida. Por favor, elija H o V.")
+                    return
+            else:
+                messagebox.showerror("Error", "Debe seleccionar H o V.")
+                return
+
+            try:
+                # Crear instancia de Outlook
+                outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+                
+                # Crear un nuevo correo
+                mail = outlook.CreateItem(0)
+                
+                # Configurar destinatarios (reemplaza con las direcciones reales)
+                mail.To = "destinatario1@ejemplo.com; destinatario2@ejemplo.com"
+                mail.CC = "copia1@ejemplo.com; copia2@ejemplo.com"
+                
+                # Configurar asunto y cuerpo del correo
+                mail.Subject = f"Salida de equipos - {choice}"
+                mail.Body = f"Adjunto encontrará el informe de salida de equipos {choice} y las fotografías correspondientes."
+                
+                # Adjuntar el archivo PDF
+                pdf_file = f"Salida Equipos {choice}.pdf"
+                if os.path.exists(pdf_file):
+                    mail.Attachments.Add(os.path.abspath(pdf_file))
+                else:
+                    messagebox.showwarning("Advertencia", f"No se encontró el archivo PDF para {choice}.")
+                
+                # Adjuntar las fotografías
+                photo_folder = "Fotos_Equipos"  # Reemplaza con la ruta real de la carpeta de fotos
+                if os.path.exists(photo_folder):
+                    wb = openpyxl.load_workbook(self.excel_files[choice])
+                    ws = wb.active
+                    for row in ws.iter_rows(min_row=2, max_col=1, values_only=True):
+                        reference = row[0]
+                        photo_path = os.path.join(photo_folder, f"{reference}.jpg")
+                        if os.path.exists(photo_path):
+                            mail.Attachments.Add(os.path.abspath(photo_path))
+                        else:
+                            messagebox.showwarning("Advertencia", f"No se encontró la foto para la referencia {reference}.")
+                else:
+                    messagebox.showwarning("Advertencia", f"No se encontró la carpeta de fotos: {photo_folder}")
+                
+                # Mostrar el correo (no lo envía automáticamente)
+                mail.Display(True)
+                
+                messagebox.showinfo("Éxito", f"Correo creado con éxito para {choice}. Por favor, revíselo antes de enviar.")
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo crear el correo: {str(e)}")
+
     def save_to_excel(self, excel_choice):
         if not all([self.reference.get(), self.value1.get(), self.value2.get(), self.value3.get(), self.entry_value4.get("1.0", tk.END).strip()]):
             messagebox.showerror("Error", "Por favor, complete todos los campos")
             return
-
         excel_file = self.excel_files[excel_choice]
-
         # Verificar si el archivo existe, si no, crearlo
         if not os.path.exists(excel_file):
             wb = openpyxl.Workbook()
